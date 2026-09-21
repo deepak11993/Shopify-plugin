@@ -1,0 +1,25 @@
+{
+  "external_id": "workflow-row-101",
+  "content_type": "article",
+  "blog": { "id": "gid://shopify/Blog/123456789", "handle": "news" },
+  "author_name": "Editorial Team",
+  "title": "Complete Shopify SEO Guide for 2026",
+  "slug": "shopify-seo-guide-2026",
+  "content_html": "<h2>Shopify SEO</h2><p>Use Shopify product optimization to improve visibility.</p>",
+  "summary_html": "<p>A practical guide to Shopify SEO.</p>",
+  "seo": {
+    "meta_title": "Shopify SEO Guide 2026: Improve Rankings and Sales",
+    "meta_description": "Improve Shopify rankings, traffic and ecommerce sales with this practical SEO guide.",
+    "primary_keyword": "Shopify SEO",
+    "secondary_keywords": ["Shopify SEO guide", "ecommerce SEO"],
+    "search_intent": "informational",
+    "faq": [],
+    "geo_entities": ["Shopify"]
+  },
+  "internal_links": [{ "anchor_text": "Shopify product optimization", "target_url": "/pages/product-optimization", "occurrence": 1 }],
+  "tags": ["Shopify SEO", "Ecommerce"],
+  "featured_image": { "url": "https://example.com/banner.jpg", "alt_text": "Shopify SEO optimization guide" },
+  "schema": { "@context": "https://schema.org", "@type": "BlogPosting" },
+  "status": "draft",
+  "redirect_old_slug": true
+}

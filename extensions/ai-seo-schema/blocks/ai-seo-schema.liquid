@@ -1,0 +1,17 @@
+{% comment %}
+  Renders validated JSON-LD stored by AI SEO Publisher on an article.
+  Add this app block to the blog article template in the theme editor.
+{% endcomment %}
+{% if article and article.metafields.ai_seo.schema_json_ld.value != blank %}
+  <script type="application/ld+json">
+    {{ article.metafields.ai_seo.schema_json_ld.value | json }}
+  </script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "AI SEO Schema",
+  "target": "head",
+  "settings": []
+}
+{% endschema %}
