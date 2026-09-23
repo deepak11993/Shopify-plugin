@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import * as helmetModule from "helmet";
+import type { RequestHandler } from "express";
 import type { Prisma } from "@prisma/client";
 import { env, allowedImageHosts } from "./config.js";
 import { db } from "./db.js";
@@ -11,11 +12,13 @@ import { buildSchemaGraph } from "./seoSchema.js";
 import { createArticle, updateArticle } from "./shopify.js";
 import { decrypt, encrypt, randomSecret, sha256, validShop, verifyAutomationSignature, verifyShopifyQuery, verifyShopifyWebhook } from "./security.js";
 
-// Namespace import + `.default` sidesteps a dual-package-hazard TS resolution
-// quirk where `import helmet from "helmet"` types `helmet` as the whole module
-// namespace (no call signature) instead of its default export, depending on
-// the exact TypeScript version/environment resolving the package's exports map.
-const helmet = helmetModule.default;
+// helmet's package.json declares an `exports` map with no per-condition
+// `types` entry. Depending on the TypeScript version resolving it, this
+// collapses `helmet`'s default export back into the whole module namespace
+// type (no call signature) — reproduced on Vercel's build but not locally.
+// The runtime value is always the real callable export; only the inferred
+// type is wrong, so force it explicitly rather than fight resolution modes.
+const helmet = helmetModule.default as unknown as (options?: Record<string, unknown>) => RequestHandler;
 
 declare global { namespace Express { interface Request { rawBody?: Buffer } } }
 
