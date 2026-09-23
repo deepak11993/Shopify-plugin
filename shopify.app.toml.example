@@ -1,7 +1,7 @@
 client_id = "YOUR_SHOPIFY_API_KEY"
 name = "AI SEO Publisher"
 application_url = "https://your-app.example.com"
-embedded = false
+embedded = true
 
 [access_scopes]
 scopes = "read_content,write_content,read_online_store_pages,write_online_store_pages"

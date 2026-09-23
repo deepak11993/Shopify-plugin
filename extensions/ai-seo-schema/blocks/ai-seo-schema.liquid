@@ -1,11 +1,41 @@
 {% comment %}
-  Renders validated JSON-LD stored by AI SEO Publisher on an article.
+  Renders SEO tags and JSON-LD stored by AI SEO Publisher on an article:
+  canonical URL, robots directive, Open Graph / Twitter Card tags, and the
+  BlogPosting/FAQPage/BreadcrumbList schema graph.
   Add this app block to the blog article template in the theme editor.
 {% endcomment %}
-{% if article and article.metafields.ai_seo.schema_json_ld.value != blank %}
-  <script type="application/ld+json">
-    {{ article.metafields.ai_seo.schema_json_ld.value | json }}
-  </script>
+{% if article %}
+  {% assign canonical_url = article.metafields.ai_seo.canonical_url.value %}
+  {% if canonical_url != blank %}
+    <link rel="canonical" href="{{ canonical_url }}">
+  {% endif %}
+
+  {% assign robots = article.metafields.ai_seo.robots.value %}
+  {% if robots != blank %}
+    <meta name="robots" content="{{ robots }}">
+  {% endif %}
+
+  {% assign social = article.metafields.ai_seo.social_meta.value %}
+  {% if social %}
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{{ social.og_title }}">
+    <meta property="og:description" content="{{ social.og_description }}">
+    {% if canonical_url != blank %}<meta property="og:url" content="{{ canonical_url }}">{% endif %}
+    {% if social.og_image != blank %}<meta property="og:image" content="{{ social.og_image }}">{% endif %}
+    <meta name="twitter:card" content="{{ social.twitter_card }}">
+    <meta name="twitter:title" content="{{ social.og_title }}">
+    <meta name="twitter:description" content="{{ social.og_description }}">
+    {% if social.og_image != blank %}<meta name="twitter:image" content="{{ social.og_image }}">{% endif %}
+  {% endif %}
+
+  {% assign schema_graph = article.metafields.ai_seo.schema_json_ld.value %}
+  {% if schema_graph %}
+    {% for schema_item in schema_graph %}
+      <script type="application/ld+json">
+        {{ schema_item | json }}
+      </script>
+    {% endfor %}
+  {% endif %}
 {% endif %}
 
 {% schema %}

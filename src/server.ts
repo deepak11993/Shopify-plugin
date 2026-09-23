@@ -7,21 +7,38 @@ import { env, allowedImageHosts } from "./config.js";
 import { db } from "./db.js";
 import { addInternalLinks, sanitizeHtml, validateImageUrl, validateSchema } from "./content.js";
 import { publishPayload } from "./schema.js";
+import { buildSchemaGraph } from "./seoSchema.js";
 import { createArticle, updateArticle } from "./shopify.js";
 import { decrypt, encrypt, randomSecret, sha256, validShop, verifyAutomationSignature, verifyShopifyQuery, verifyShopifyWebhook } from "./security.js";
 
 declare global { namespace Express { interface Request { rawBody?: Buffer } } }
 
 const app = express();
-app.use(helmet({ contentSecurityPolicy: false }));
+// frameguard (X-Frame-Options: SAMEORIGIN) would stop Shopify Admin from
+// rendering this app inside its iframe at all. Routes that must be
+// embeddable set their own `frame-ancestors` CSP scoped to the requesting shop.
+app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
 app.use(cookieParser());
+
+function frameAncestorsHeader(shop: string): string {
+  return validShop(shop) ? `frame-ancestors https://${shop} https://admin.shopify.com;` : "frame-ancestors 'none';";
+}
 app.use(express.json({ limit: "3mb", verify: (req, _res, buffer) => { (req as express.Request).rawBody = Buffer.from(buffer); } }));
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "shopify-ai-seo-publisher" }));
 
+// Shopify Admin loads embedded apps inside an iframe. A plain HTTP redirect
+// to Shopify's OAuth grant screen would try to render that screen inside the
+// iframe, which Shopify blocks, leaving a blank frame. Breaking out via
+// `window.top.location` works whether or not the current page is embedded.
+function topLevelRedirect(res: express.Response, url: string) {
+  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"></head><body><script>window.top.location.href = ${JSON.stringify(url)};</script></body></html>`);
+}
+
 app.get("/auth", async (req, res) => {
   const shop = String(req.query.shop || "").toLowerCase();
   if (!validShop(shop)) return res.status(400).send("Invalid Shopify domain");
+  res.setHeader("Content-Security-Policy", frameAncestorsHeader(shop));
   const state = crypto.randomBytes(24).toString("hex");
   await db.oAuthState.create({ data: { state, shopDomain: shop, expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
   const redirectUri = `${env.APP_URL}/auth/callback`;
@@ -30,7 +47,7 @@ app.get("/auth", async (req, res) => {
   url.searchParams.set("scope", env.SHOPIFY_SCOPES);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
-  return res.redirect(url.toString());
+  return topLevelRedirect(res, url.toString());
 });
 
 app.get("/auth/callback", async (req, res) => {
@@ -77,9 +94,13 @@ app.post("/api/v1/content/upsert", async (req, res) => {
     jobId = job.id;
     const html = addInternalLinks(sanitizeHtml(payload.content_html), payload.internal_links);
     const token = decrypt(store.accessTokenEncrypted);
-    const article = payload.shopify_article_id ? await updateArticle(store.shopDomain, token, payload, html) : await createArticle(store.shopDomain, token, payload, html);
+    const canonicalUrl = payload.seo.canonical_url ?? `https://${store.shopDomain}/blogs/${payload.blog.handle}/${payload.slug}`;
+    const schemaGraph = buildSchemaGraph(payload, store.shopDomain, canonicalUrl);
+    const article = payload.shopify_article_id
+      ? await updateArticle(store.shopDomain, token, payload, html, canonicalUrl, schemaGraph)
+      : await createArticle(store.shopDomain, token, payload, html, canonicalUrl, schemaGraph);
     const url = `https://${store.shopDomain}/blogs/${article.blog.handle}/${article.handle}`;
-    const response = { success: true, operation: payload.shopify_article_id ? "updated" : "created", status: article.isPublished ? "published" : "draft", shopify_article_id: article.id, shopify_url: url, external_id: payload.external_id, warnings: payload.schema ? ["Schema is stored in a metafield; enable the included theme app block to render it."] : [] };
+    const response = { success: true, operation: payload.shopify_article_id ? "updated" : "created", status: article.isPublished ? "published" : "draft", shopify_article_id: article.id, shopify_url: url, external_id: payload.external_id, warnings: ["Canonical URL, robots, Open Graph, Twitter Card and JSON-LD schema are stored in metafields; enable the included theme app block to render them in the page head."] };
     await db.publishJob.update({ where: { id: job.id }, data: { status: "completed", operation: response.operation, articleId: article.id, articleUrl: url, responseJson: response } });
     if (payload.callback_url) void fetch(payload.callback_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(response) }).catch(() => undefined);
     return res.json(response);
@@ -98,6 +119,27 @@ app.post("/webhooks/app-uninstalled", async (req, res) => {
   res.sendStatus(200);
 });
 
-app.get("/", (_req, res) => res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>AI SEO Publisher</title><style>body{font:16px system-ui;max-width:760px;margin:64px auto;padding:24px;color:#172b4d}input,button{padding:12px;font:inherit}input{width:65%}button{background:#008060;color:white;border:0;border-radius:6px}code{background:#eef2f5;padding:3px 6px}</style></head><body><h1>AI SEO Publisher for Shopify</h1><p>Connect a Shopify store, then send signed content from n8n or another AI automation tool.</p><form action="/auth"><input name="shop" placeholder="your-store.myshopify.com" required><button>Connect store</button></form><p>Publishing endpoint: <code>POST /api/v1/content/upsert</code></p></body></html>`));
+const connectStoreHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>AI SEO Publisher</title><style>body{font:16px system-ui;max-width:760px;margin:64px auto;padding:24px;color:#172b4d}input,button{padding:12px;font:inherit}input{width:65%}button{background:#008060;color:white;border:0;border-radius:6px}code{background:#eef2f5;padding:3px 6px}</style></head><body><h1>AI SEO Publisher for Shopify</h1><p>Connect a Shopify store, then send signed content from n8n or another AI automation tool.</p><form action="/auth"><input name="shop" placeholder="your-store.myshopify.com" required><button>Connect store</button></form><p>Publishing endpoint: <code>POST /api/v1/content/upsert</code></p></body></html>`;
+
+// Every page Shopify renders inside the embedded admin iframe must load App
+// Bridge with the app's API key, or Shopify treats the app as broken.
+const embeddedPlaceholderHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="shopify-api-key" content="${env.SHOPIFY_API_KEY}"><script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script><title>AI SEO Publisher</title><style>body{font:16px system-ui;max-width:640px;margin:64px auto;padding:24px;color:#172b4d}</style></head><body><h1>AI SEO Publisher</h1><p>Your store is connected. The in-admin SEO dashboard is coming soon — for now, publish content through the API using the credentials shown after installation.</p></body></html>`;
+
+app.get("/", async (req, res) => {
+  const shop = String(req.query.shop || "").toLowerCase();
+  res.setHeader("Content-Security-Policy", frameAncestorsHeader(shop));
+  if (shop && validShop(shop)) {
+    const store = await db.store.findUnique({ where: { shopDomain: shop } });
+    if (!store) return topLevelRedirect(res, `${env.APP_URL}/auth?shop=${encodeURIComponent(shop)}`);
+    if (req.query.embedded === "1") return res.type("html").send(embeddedPlaceholderHtml);
+  }
+  return res.type("html").send(connectStoreHtml);
+});
+
+app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(error);
+  if (res.headersSent) return;
+  res.status(500).type("html").send(`<h1>Something went wrong</h1><p>The request could not be completed. Check the server logs for details.</p>`);
+});
 
 app.listen(env.PORT, () => console.log(`AI SEO Publisher listening on ${env.PORT}`));

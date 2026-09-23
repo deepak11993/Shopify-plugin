@@ -9,6 +9,7 @@ const envSchema = z.object({
   SHOPIFY_API_VERSION: z.string().default("2026-07"),
   SHOPIFY_SCOPES: z.string().default("read_content,write_content,read_online_store_pages,write_online_store_pages"),
   DATABASE_URL: z.string().min(1),
+  DATABASE_CA_CERT_PATH: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
   ALLOWED_IMAGE_HOSTS: z.string().default("")
 });

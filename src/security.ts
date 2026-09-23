@@ -51,3 +51,36 @@ export function verifyShopifyWebhook(rawBody: Buffer, signature: string): boolea
 export function validShop(shop: string): boolean {
   return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop);
 }
+
+type SessionTokenPayload = { iss: string; dest: string; aud: string; sub: string; exp: number; nbf?: number };
+
+/**
+ * Verifies a Shopify session token (JWT, HS256) issued to an embedded app by
+ * App Bridge. See https://shopify.dev/docs/apps/build/authentication-authorization/session-tokens
+ */
+export function verifySessionToken(token: string): { shop: string; payload: SessionTokenPayload } | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [headerB64, payloadB64, signatureB64] = parts;
+  let header: { alg?: string };
+  let payload: SessionTokenPayload;
+  try {
+    header = JSON.parse(Buffer.from(headerB64, "base64url").toString("utf8"));
+    payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (header.alg !== "HS256") return null;
+  const expectedSignature = crypto.createHmac("sha256", env.SHOPIFY_API_SECRET).update(`${headerB64}.${payloadB64}`).digest("base64url");
+  if (!safeEqual(signatureB64, expectedSignature)) return null;
+
+  const now = Date.now() / 1000;
+  if (typeof payload.exp !== "number" || payload.exp < now) return null;
+  if (typeof payload.nbf === "number" && payload.nbf > now) return null;
+  if (payload.aud !== env.SHOPIFY_API_KEY) return null;
+
+  const shop = String(payload.dest || "").replace(/^https?:\/\//, "").toLowerCase();
+  if (!validShop(shop)) return null;
+
+  return { shop, payload };
+}
