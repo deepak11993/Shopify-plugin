@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
-import helmet from "helmet";
+import * as helmetModule from "helmet";
 import type { Prisma } from "@prisma/client";
 import { env, allowedImageHosts } from "./config.js";
 import { db } from "./db.js";
@@ -10,6 +10,12 @@ import { publishPayload } from "./schema.js";
 import { buildSchemaGraph } from "./seoSchema.js";
 import { createArticle, updateArticle } from "./shopify.js";
 import { decrypt, encrypt, randomSecret, sha256, validShop, verifyAutomationSignature, verifyShopifyQuery, verifyShopifyWebhook } from "./security.js";
+
+// Namespace import + `.default` sidesteps a dual-package-hazard TS resolution
+// quirk where `import helmet from "helmet"` types `helmet` as the whole module
+// namespace (no call signature) instead of its default export, depending on
+// the exact TypeScript version/environment resolving the package's exports map.
+const helmet = helmetModule.default;
 
 declare global { namespace Express { interface Request { rawBody?: Buffer } } }
 
