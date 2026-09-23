@@ -1,6 +1,7 @@
 {
-  "name": "shopify-ai-seo-publisher",
-  "version": "1.0.1",
+  "name": "hrl-ai-shopify-plugin",
+  "version": "2.0.0",
+  "description": "HRL AI Shopify Plugin - publish AI-generated, SEO-ready blog posts to Shopify from any automation (n8n, Make, Zapier, custom scripts).",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,24 +9,27 @@
     "build": "prisma generate && tsc",
     "start": "node dist/src/server.js",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/adapter-pg": "^6.16.2",
     "@prisma/client": "^6.16.2",
     "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "pg": "^8.23.0",
+    "sanitize-html": "^2.17.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.9",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
+    "@types/sanitize-html": "^2.16.0",
     "prisma": "^6.16.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
